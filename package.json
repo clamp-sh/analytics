@@ -1,0 +1,63 @@
+{
+  "name": "@clamp-sh/analytics",
+  "version": "0.3.1",
+  "description": "Lightweight analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, and React.",
+  "license": "MIT",
+  "homepage": "https://clamp.sh",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clamp-sh/clamp.git",
+    "directory": "packages/sdk"
+  },
+  "keywords": [
+    "analytics",
+    "tracking",
+    "pageviews",
+    "sessions",
+    "react",
+    "nextjs"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "react": "^19",
+    "@types/react": "^19",
+    "tsup": "^8",
+    "typescript": "^5"
+  }
+}
