@@ -1,0 +1,75 @@
+{
+  "name": "@clamp-sh/analytics",
+  "version": "0.10.0",
+  "description": "Lightweight analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, and React.",
+  "license": "MIT",
+  "homepage": "https://clamp.sh/docs/sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clamp-sh/analytics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/clamp-sh/analytics/issues"
+  },
+  "keywords": [
+    "analytics",
+    "tracking",
+    "pageviews",
+    "sessions",
+    "react",
+    "nextjs"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.mjs",
+      "require": "./dist/errors.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "web-vitals": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "web-vitals": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "react": "^19",
+    "tsup": "^8",
+    "typescript": "^5",
+    "web-vitals": "^4.2.4"
+  }
+}
