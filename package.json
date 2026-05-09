@@ -1,0 +1,105 @@
+{
+  "name": "@clamp-sh/analytics",
+  "version": "0.11.0",
+  "description": "Lightweight analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, and React.",
+  "license": "MIT",
+  "homepage": "https://clamp.sh/docs/sdk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clamp-sh/analytics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/clamp-sh/analytics/issues"
+  },
+  "keywords": [
+    "analytics",
+    "tracking",
+    "pageviews",
+    "sessions",
+    "react",
+    "nextjs"
+  ],
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.mjs",
+      "require": "./dist/errors.js"
+    },
+    "./extensions/outbound-links": {
+      "types": "./dist/extensions/outbound-links.d.ts",
+      "import": "./dist/extensions/outbound-links.mjs",
+      "require": "./dist/extensions/outbound-links.js"
+    },
+    "./extensions/downloads": {
+      "types": "./dist/extensions/downloads.d.ts",
+      "import": "./dist/extensions/downloads.mjs",
+      "require": "./dist/extensions/downloads.js"
+    },
+    "./extensions/not-found": {
+      "types": "./dist/extensions/not-found.d.ts",
+      "import": "./dist/extensions/not-found.mjs",
+      "require": "./dist/extensions/not-found.js"
+    },
+    "./extensions/data-attributes": {
+      "types": "./dist/extensions/data-attributes.d.ts",
+      "import": "./dist/extensions/data-attributes.mjs",
+      "require": "./dist/extensions/data-attributes.js"
+    },
+    "./extensions/web-vitals": {
+      "types": "./dist/extensions/web-vitals.d.ts",
+      "import": "./dist/extensions/web-vitals.mjs",
+      "require": "./dist/extensions/web-vitals.js"
+    },
+    "./extensions/section-views": {
+      "types": "./dist/extensions/section-views.d.ts",
+      "import": "./dist/extensions/section-views.mjs",
+      "require": "./dist/extensions/section-views.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "web-vitals": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "web-vitals": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^19",
+    "react": "^19",
+    "tsup": "^8",
+    "typescript": "^5",
+    "web-vitals": "^4.2.4"
+  }
+}
