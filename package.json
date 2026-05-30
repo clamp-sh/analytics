@@ -1,6 +1,6 @@
 {
   "name": "@clamp-sh/analytics",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Privacy-first analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms.",
   "license": "MIT",
   "homepage": "https://clamp.sh/docs/sdk",

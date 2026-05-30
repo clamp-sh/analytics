@@ -1,5 +1,11 @@
 # @clamp-sh/analytics
 
+## 0.12.0
+
+### Minor Changes
+
+- [`39d2c41`](https://github.com/clamp-sh/clamp/commit/39d2c418a45ce363ed387439bd6b47a1767a5626) Thanks [@sbj-o](https://github.com/sbj-o)! - Auto-init from `<script data-clamp-project="...">` attribute on the CDN/IIFE build. Lets users on hosted platforms (Webflow, Shopify, WordPress, Squarespace, etc.) paste a single script tag instead of two. Supports `data-clamp-extensions="outbound-links,downloads,..."` for extension opt-in.
+
 ## 0.11.0
 
 ### Minor Changes
