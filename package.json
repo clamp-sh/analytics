@@ -1,7 +1,7 @@
 {
   "name": "@clamp-sh/analytics",
   "version": "0.11.0",
-  "description": "Lightweight analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, and React.",
+  "description": "Privacy-first analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms.",
   "license": "MIT",
   "homepage": "https://clamp.sh/docs/sdk",
   "repository": {
@@ -17,7 +17,14 @@
     "pageviews",
     "sessions",
     "react",
-    "nextjs"
+    "nextjs",
+    "webflow",
+    "shopify",
+    "wordpress",
+    "cdn",
+    "privacy",
+    "cookie-free",
+    "gdpr"
   ],
   "main": "dist/index.js",
   "module": "dist/index.mjs",
