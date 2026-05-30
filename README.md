@@ -1,13 +1,13 @@
 <p align="center">
-  <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/v/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a" alt="npm version" /></a>
-  <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/dm/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a" alt="npm downloads" /></a>
-  <a href="https://bundlephobia.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/bundlephobia/minzip/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a&label=size" alt="bundle size" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a" alt="license" /></a>
+  <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/v/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/dm/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a" alt="npm downloads" /></a>
+  <a href="https://bundlephobia.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/bundlephobia/minzip/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a&label=size" alt="bundle size" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a" alt="license" /></a>
 </p>
 
 # @clamp-sh/analytics
 
-Analytics SDK for [Clamp](https://clamp.sh), agentic analytics your coding agent can read, query, and act on. Track pageviews, custom events, and server-side actions. No cookies, no personal data collected, no consent banner required.
+Privacy-first analytics SDK for [Clamp](https://clamp.sh). Auto-pageviews, sessions, batching. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms. No cookies, no personal data collected, no consent banner required.
 
 ## Install
 
