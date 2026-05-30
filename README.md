@@ -113,13 +113,55 @@ try {
 
 The error-capture machinery (browser side) lives in a separate chunk that lazy-loads on first use, so users who never capture errors pay zero bytes for it. A per-session client-side rate limit caps duplicate-message captures at 5 to prevent runaway loops from blowing through the event quota; the server adds a stable `error.fingerprint` at ingest so the same bug groups across occurrences regardless of which session reported it.
 
-## Script tag
+## Script tag (no build step)
+
+For sites you can't `npm install` into — Webflow, Shopify, WordPress, Squarespace, Ghost, Framer, Wix, and others — drop one script tag in the page `<head>`. The SDK reads the project ID from the tag's data attribute and starts tracking pageviews and sessions automatically.
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/@clamp-sh/analytics/dist/cdn.global.js"></script>
+<!-- Clamp Analytics — https://clamp.sh -->
+<script
+  src="https://cdn.clamp.sh/v0/cdn.global.js"
+  data-clamp-project="proj_xxx"
+  defer
+></script>
+```
+
+Replace `proj_xxx` with your project ID from the [Clamp dashboard](https://clamp.sh/dashboard). Platform-specific install guides live at [clamp.sh/docs/install](https://clamp.sh/docs/install).
+
+### Opt into auto-tracking extensions
+
+Add `data-clamp-extensions` (comma-separated):
+
+```html
+<script
+  src="https://cdn.clamp.sh/v0/cdn.global.js"
+  data-clamp-project="proj_xxx"
+  data-clamp-extensions="outbound-links,downloads"
+  defer
+></script>
+```
+
+Available: `outbound-links`, `downloads`, `data-attributes`, `section-views`, `web-vitals`, `not-found`. See the [extensions reference](https://clamp.sh/docs/sdk/extensions).
+
+### Manual init (for ESM or custom configuration)
+
+If you need programmatic configuration — endpoint override, excluded paths, error capture toggle — use the manual API instead of the data attribute:
+
+```html
+<script src="https://cdn.clamp.sh/v0/cdn.global.js"></script>
 <script>
-  clamp.init("proj_xxx")
+  clamp.init("proj_xxx", {
+    excludePaths: ["/dashboard"],
+    captureErrors: true,
+  });
 </script>
+```
+
+Or import the ESM build directly:
+
+```ts
+import { init } from "@clamp-sh/analytics";
+init("proj_xxx", { excludePaths: ["/dashboard"] });
 ```
 
 ## Extensions

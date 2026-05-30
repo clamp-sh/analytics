@@ -517,3 +517,32 @@ export type {
   BatchPayload,
   SinglePayload,
 } from "./types.js";
+
+/* ── CDN auto-init ──────────────────────────────────────────────────
+   When the SDK is loaded via <script src> with a data-clamp-project
+   attribute, init automatically. Lets users on hosted platforms
+   (Webflow, Shopify, WordPress, etc.) paste a single tag.
+
+   Skipped if the consumer imported the ESM/CJS build directly and
+   didn't set the attribute on the loading script. */
+if (typeof document !== "undefined") {
+  const currentScript = document.currentScript as HTMLScriptElement | null;
+  const projectId = currentScript?.dataset.clampProject;
+  if (projectId) {
+    const extensions: Extensions = {};
+    const extAttr = currentScript?.dataset.clampExtensions;
+    if (extAttr) {
+      for (const ext of extAttr.split(",").map((s) => s.trim())) {
+        switch (ext) {
+          case "outbound-links": extensions.outboundLinks = true; break;
+          case "downloads": extensions.downloads = true; break;
+          case "data-attributes": extensions.dataAttributes = true; break;
+          case "section-views": extensions.sectionViews = true; break;
+          case "web-vitals": extensions.webVitals = true; break;
+          case "not-found": extensions.notFound = true; break;
+        }
+      }
+    }
+    init(projectId, { extensions });
+  }
+}
