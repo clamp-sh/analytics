@@ -1,10 +1,4 @@
 <p align="center">
-  <a href="https://clamp.sh">
-    <img src="https://raw.githubusercontent.com/clamp-sh/analytics/main/.github/banner.png" alt="Clamp" />
-  </a>
-</p>
-
-<p align="center">
   <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/v/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/dm/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a" alt="npm downloads" /></a>
   <a href="https://bundlephobia.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/bundlephobia/minzip/@clamp-sh/analytics?style=flat-square&color=B8E847&labelColor=1a1a1a&label=size" alt="bundle size" /></a>
