@@ -2,6 +2,8 @@
   <a href="https://clamp.sh"><img src="https://clamp.sh/assets/repo-banner.png" alt="Clamp Analytics — privacy-first product analytics with a built-in MCP server" width="800" /></a>
 </div>
 
+<br />
+
 <p align="center">
   <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/v/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a" alt="npm version" /></a>
   <a href="https://www.npmjs.com/package/@clamp-sh/analytics"><img src="https://img.shields.io/npm/dm/@clamp-sh/analytics?style=flat-square&color=8cc1c5&labelColor=1a1a1a" alt="npm downloads" /></a>
