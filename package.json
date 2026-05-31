@@ -1,7 +1,7 @@
 {
   "name": "@clamp-sh/analytics",
   "version": "0.12.0",
-  "description": "Privacy-first analytics SDK for Clamp. Auto-pageviews, sessions, batching. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms.",
+  "description": "Privacy-first analytics SDK for Clamp Analytics. MCP-native — your AI agent can query the same events. Auto-pageviews, sessions, revenue, errors. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms.",
   "license": "MIT",
   "homepage": "https://clamp.sh/docs/sdk",
   "repository": {
@@ -13,18 +13,25 @@
   },
   "keywords": [
     "analytics",
+    "web-analytics",
+    "product-analytics",
     "tracking",
     "pageviews",
     "sessions",
+    "event-tracking",
+    "revenue-tracking",
+    "error-tracking",
     "react",
     "nextjs",
+    "typescript",
     "webflow",
     "shopify",
     "wordpress",
     "cdn",
-    "privacy",
-    "cookie-free",
-    "gdpr"
+    "privacy-first",
+    "cookieless",
+    "gdpr",
+    "mcp"
   ],
   "main": "dist/index.js",
   "module": "dist/index.mjs",
