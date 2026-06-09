@@ -96,6 +96,11 @@ class BrowserClient<E extends EventMap = AnyEvents> {
 
     if (opts?.debug) this.debug = true;
 
+    if (this.initialized) {
+      this.log("init: already initialized, ignoring duplicate call");
+      return;
+    }
+
     // Guardrail: a missing or malformed projectId is the #1 cause of silent
     // integration failures. Refuse to initialize and log one loud warning so
     // it's obvious in the browser console instead of an opaque 400 on every
@@ -215,12 +220,14 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     // and is dynamically imported so the main bundle stays minimal for users
     // who don't opt in.
     if (opts?.captureErrors) {
-      this.loadErrorsModule().then((mod) => {
-        const trackFn = (name: string, properties: EventProperties) =>
-          this.track(name as any, properties as any);
-        mod.installErrorCapture(trackFn);
-        this.log("error capture: installed window.onerror + unhandledrejection listeners");
-      });
+      this.loadErrorsModule()
+        .then((mod) => {
+          const trackFn = (name: string, properties: EventProperties) =>
+            this.track(name as any, properties as any);
+          mod.installErrorCapture(trackFn);
+          this.log("error capture: installed window.onerror + unhandledrejection listeners");
+        })
+        .catch((err) => console.warn("[clamp] failed to load errors module", err));
     }
   }
 
@@ -247,7 +254,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
           mod.installOutboundLinks(track);
           this.log("ext: outboundLinks installed");
         })
-        .catch(() => this.log("ext: failed to load outbound-links chunk"));
+        .catch((err) => console.warn("[clamp] failed to load outbound-links extension", err));
     }
     if (ext.downloads) {
       const exts = typeof ext.downloads === "object" ? ext.downloads.extensions : undefined;
@@ -256,7 +263,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
           mod.installDownloads(track, exts);
           this.log("ext: downloads installed");
         })
-        .catch(() => this.log("ext: failed to load downloads chunk"));
+        .catch((err) => console.warn("[clamp] failed to load downloads extension", err));
     }
     if (ext.notFound) {
       const pattern = typeof ext.notFound === "object" ? ext.notFound.pattern : undefined;
@@ -265,7 +272,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
           mod.install404(track, pattern);
           this.log("ext: 404 detection installed");
         })
-        .catch(() => this.log("ext: failed to load not-found chunk"));
+        .catch((err) => console.warn("[clamp] failed to load not-found extension", err));
     }
     if (ext.dataAttributes) {
       import("./extensions/data-attributes.js")
@@ -273,14 +280,14 @@ class BrowserClient<E extends EventMap = AnyEvents> {
           mod.installDataAttributes(track);
           this.log("ext: dataAttributes installed");
         })
-        .catch(() => this.log("ext: failed to load data-attributes chunk"));
+        .catch((err) => console.warn("[clamp] failed to load data-attributes extension", err));
     }
     if (ext.webVitals) {
       const rate = typeof ext.webVitals === "object" ? ext.webVitals.sampleRate : 1;
       import("./extensions/web-vitals.js")
         .then((mod) => mod.installWebVitals(track, rate))
         .then(() => this.log(`ext: webVitals installed (sampleRate=${rate})`))
-        .catch(() => this.log("ext: failed to load web-vitals chunk"));
+        .catch((err) => console.warn("[clamp] failed to load web-vitals extension", err));
     }
     if (ext.sectionViews) {
       const threshold = typeof ext.sectionViews === "object" ? ext.sectionViews.threshold : 0.4;
@@ -289,7 +296,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
           mod.installSectionViews(track, threshold);
           this.log(`ext: sectionViews installed (threshold=${threshold})`);
         })
-        .catch(() => this.log("ext: failed to load section-views chunk"));
+        .catch((err) => console.warn("[clamp] failed to load section-views extension", err));
     }
   }
 
