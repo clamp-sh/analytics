@@ -1,5 +1,13 @@
 # @clamp-sh/analytics
 
+## 0.12.1
+
+### Patch Changes
+
+- [`52bcc02`](https://github.com/clamp-sh/clamp/commit/52bcc02e3ff1b540f44aed6043d064c57c0a5a60) Thanks [@sbj-o](https://github.com/sbj-o)! - Extension chunk-load failures now surface via `console.warn` instead of being swallowed when `debug` is off, so a broken `outboundLinks` / `downloads` / `notFound` / `dataAttributes` / `webVitals` / `sectionViews` install is visible in production. The errors-module load (`captureErrors: true`) gets the same treatment.
+
+  `init()` is now idempotent: a duplicate call (React Strict Mode double-mount, fast refresh, accidental re-mount) is logged and ignored instead of stacking a second `setInterval`, a second IntersectionObserver, duplicate `visibilitychange` / `pagehide` listeners, and another `history.pushState` wrapper.
+
 ## 0.12.0
 
 ### Minor Changes
