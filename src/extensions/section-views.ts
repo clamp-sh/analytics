@@ -33,7 +33,7 @@ export function installSectionViews(track: TrackFn, threshold = 0.4): () => void
         const name = (entry.target as HTMLElement).getAttribute("data-clamp-section");
         if (!name || seen.has(name)) continue;
         seen.add(name);
-        track("section_viewed", { section: name, pathname: location.pathname });
+        track("$section_viewed", { section: name, pathname: location.pathname });
         observer.unobserve(entry.target);
       }
     },

@@ -44,7 +44,7 @@ export function installDownloads(track: TrackFn, extensions?: string[]): () => v
 
       const filename = url.pathname.split("/").pop() ?? "";
 
-      track("download", {
+      track("$download", {
         url: url.href,
         filename,
         extension: ext,

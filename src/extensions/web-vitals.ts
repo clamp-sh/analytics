@@ -32,7 +32,7 @@ export async function installWebVitals(
     const wv = await import("web-vitals");
 
     const send = (metric: { name: string; value: number; rating: string; id: string }) => {
-      track("web_vital", {
+      track("$web_vital", {
         metric: metric.name,
         value: String(Math.round(metric.value * 100) / 100),
         rating: metric.rating,

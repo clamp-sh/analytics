@@ -1,5 +1,6 @@
 import type { EventPayload, BatchPayload, EventMap, AnyEvents, EventProperties, EventPropertyValue } from "./types.js";
 import type * as ErrorsModule from "./errors.js";
+import { isReservedWireName, RESERVED_NAME_ERROR } from "./wire-names.js";
 
 // ── Default endpoint ────────────────────────────────────────────────
 const DEFAULT_ENDPOINT = "https://api.clamp.sh";
@@ -59,6 +60,9 @@ class BrowserClient<E extends EventMap = AnyEvents> {
   private endpoint: string = DEFAULT_ENDPOINT;
   private sessionId: string | null = null;
   private anonymousId: string | null = null;
+  /** Authenticated user id, set by identify(). Persisted in localStorage
+   *  so it survives reloads + crosses tabs. Cleared by reset(). */
+  private userId: string | null = null;
   private queue: EventPayload[] = [];
   private preInitQueue: Array<{ name: string; props?: EventProperties }> = [];
   private initialized = false;
@@ -72,6 +76,12 @@ class BrowserClient<E extends EventMap = AnyEvents> {
   private engagementSeconds = 0;
   private engagementTimer: ReturnType<typeof setInterval> | null = null;
   private pageviewEndSent = false;
+  // Highest scroll % the user has reached on the current pageview. Updated
+  // on each scroll (rAF-throttled). Sent in pageview_end alongside
+  // engagement_seconds — together they answer "how far did the user get,
+  // and did they linger?". Resets on pageview() for SPA navs.
+  private maxScrollPct = 0;
+  private scrollRafId: number | null = null;
 
   // Session idle tracking
   private hiddenAt: number | null = null;
@@ -146,11 +156,17 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       localStorage.getItem("clamp_aid") ?? this.newId("anon");
     localStorage.setItem("clamp_aid", this.anonymousId);
 
-    this.log("Initialized", { projectId, endpoint: this.endpoint, sessionId: this.sessionId, anonymousId: this.anonymousId });
+    // User ID: persists across sessions, set by identify(), cleared by
+    // reset(). When non-null, every emitted event carries it as userId.
+    this.userId = localStorage.getItem("clamp_uid");
 
-    // Flush pre-init buffer
+    this.log("Initialized", { projectId, endpoint: this.endpoint, sessionId: this.sessionId, anonymousId: this.anonymousId, userId: this.userId });
+
+    // Flush pre-init buffer. Use emit() directly so any $-prefixed system
+    // events buffered via emitSystem() (e.g. an early captureError()) replay
+    // without being re-rejected by the reserved-prefix guard on track().
     for (const e of this.preInitQueue) {
-      this.track(e.name as any, e.props as any);
+      this.emit(e.name, e.props);
     }
     this.preInitQueue = [];
 
@@ -174,6 +190,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     window.addEventListener("pageshow", (e) => {
       if (e.persisted) {
         this.pageviewEndSent = false;
+        this.maxScrollPct = 0;
         this.pageview();
       }
     });
@@ -209,6 +226,19 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       this.flush(true);
     });
 
+    // Max-scroll tracking — rAF-throttled passive listener. One update per
+    // paint at most, so scroll-heavy pages don't pay measurable CPU.
+    // Captures the initial visible fold once on install so a user who
+    // never scrolls still gets a non-zero reading.
+    window.addEventListener("scroll", () => {
+      if (this.scrollRafId !== null) return;
+      this.scrollRafId = requestAnimationFrame(() => {
+        this.scrollRafId = null;
+        this.updateMaxScroll();
+      });
+    }, { passive: true });
+    this.updateMaxScroll();
+
     // Start engagement counter
     this.startEngagement();
 
@@ -222,8 +252,10 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     if (opts?.captureErrors) {
       this.loadErrorsModule()
         .then((mod) => {
+          // captureError emits $error — route through emitSystem to bypass
+          // the reserved-prefix guard on the public track().
           const trackFn = (name: string, properties: EventProperties) =>
-            this.track(name as any, properties as any);
+            this.emitSystem(name, properties);
           mod.installErrorCapture(trackFn);
           this.log("error capture: installed window.onerror + unhandledrejection listeners");
         })
@@ -245,13 +277,23 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     // Each extension lives at its own subpath and is dynamic-imported
     // independently. Users who only enable one extension only download
     // that one chunk; the others stay out of the bundle entirely.
-    const track = (name: string, props?: EventProperties) =>
-      this.track(name as any, props as any);
+    //
+    // System extensions emit $-prefixed wire names ($web_vital,
+    // $section_viewed, etc.) so the bridge routes through emitSystem to
+    // bypass the reserved-prefix guard on the public track().
+    const systemTrack = (name: string, props?: EventProperties) =>
+      this.emitSystem(name, props);
+    // The data-attributes extension forwards user-supplied event names
+    // straight from HTML, so it must use the guarded track() path — a
+    // page author can't smuggle in a $-prefixed canonical name via a
+    // data-clamp-event attribute.
+    const userTrack = (name: string, props?: EventProperties) =>
+      this.track(name as keyof E & string, props as E[keyof E & string] extends EventProperties ? E[keyof E & string] : EventProperties);
 
     if (ext.outboundLinks) {
       import("./extensions/outbound-links.js")
         .then((mod) => {
-          mod.installOutboundLinks(track);
+          mod.installOutboundLinks(systemTrack);
           this.log("ext: outboundLinks installed");
         })
         .catch((err) => console.warn("[clamp] failed to load outbound-links extension", err));
@@ -260,7 +302,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       const exts = typeof ext.downloads === "object" ? ext.downloads.extensions : undefined;
       import("./extensions/downloads.js")
         .then((mod) => {
-          mod.installDownloads(track, exts);
+          mod.installDownloads(systemTrack, exts);
           this.log("ext: downloads installed");
         })
         .catch((err) => console.warn("[clamp] failed to load downloads extension", err));
@@ -269,7 +311,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       const pattern = typeof ext.notFound === "object" ? ext.notFound.pattern : undefined;
       import("./extensions/not-found.js")
         .then((mod) => {
-          mod.install404(track, pattern);
+          mod.install404(systemTrack, pattern);
           this.log("ext: 404 detection installed");
         })
         .catch((err) => console.warn("[clamp] failed to load not-found extension", err));
@@ -277,7 +319,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     if (ext.dataAttributes) {
       import("./extensions/data-attributes.js")
         .then((mod) => {
-          mod.installDataAttributes(track);
+          mod.installDataAttributes(userTrack);
           this.log("ext: dataAttributes installed");
         })
         .catch((err) => console.warn("[clamp] failed to load data-attributes extension", err));
@@ -285,7 +327,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     if (ext.webVitals) {
       const rate = typeof ext.webVitals === "object" ? ext.webVitals.sampleRate : 1;
       import("./extensions/web-vitals.js")
-        .then((mod) => mod.installWebVitals(track, rate))
+        .then((mod) => mod.installWebVitals(systemTrack, rate))
         .then(() => this.log(`ext: webVitals installed (sampleRate=${rate})`))
         .catch((err) => console.warn("[clamp] failed to load web-vitals extension", err));
     }
@@ -293,7 +335,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       const threshold = typeof ext.sectionViews === "object" ? ext.sectionViews.threshold : 0.4;
       import("./extensions/section-views.js")
         .then((mod) => {
-          mod.installSectionViews(track, threshold);
+          mod.installSectionViews(systemTrack, threshold);
           this.log(`ext: sectionViews installed (threshold=${threshold})`);
         })
         .catch((err) => console.warn("[clamp] failed to load section-views extension", err));
@@ -304,8 +346,27 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     name: K,
     properties?: E[K] extends EventProperties ? E[K] : EventProperties,
   ) {
+    // Reserve $-prefixed names for canonical revenue events + SDK-emitted
+    // system events. Drop silently with a console.warn so the rest of the
+    // app keeps working; users land on a clearer error than an opaque
+    // server-side rejection of a name collision.
+    if (typeof name === "string" && isReservedWireName(name)) {
+      console.warn(`[clamp] ${RESERVED_NAME_ERROR} (got "${name}")`);
+      return;
+    }
+    this.emit(name, properties as EventProperties | undefined);
+  }
+
+  /**
+   * Internal emission path shared by the public `track()` and the
+   * `emitSystem()` helper. Pushes onto the pre-init buffer if init hasn't
+   * run yet, otherwise builds an EventPayload and queues it for the next
+   * flush. Bypasses the reserved-prefix guard so the SDK can emit its own
+   * $-prefixed system events.
+   */
+  private emit(name: string, properties?: EventProperties) {
     if (!this.initialized) {
-      this.preInitQueue.push({ name, props: properties as EventProperties });
+      this.preInitQueue.push({ name, props: properties });
       return;
     }
 
@@ -315,20 +376,88 @@ class BrowserClient<E extends EventMap = AnyEvents> {
       referrer: document.referrer,
       sessionId: this.sessionId!,
       anonymousId: this.anonymousId!,
+      userId: this.userId ?? "",
       timestamp: new Date().toISOString(),
       screenWidth: window.innerWidth,
       screenHeight: window.innerHeight,
       language: navigator.language,
       platform: "web",
-      properties: properties as EventProperties,
+      properties,
     };
     this.queue.push(event);
     this.log(`track: ${name}`, properties || {});
     if (this.queue.length >= BATCH_FLUSH_AT_LENGTH) this.flush();
   }
 
+  /**
+   * Emit a $-prefixed system event. Used by the SDK's own instrumentation
+   * (pageview, identify, error capture, extensions, revenue) to bypass the
+   * reserved-prefix guard that fires on the public `track()`.
+   */
+  emitSystem(name: string, properties?: EventProperties) {
+    this.emit(name, properties);
+  }
+
+  /**
+   * Bind subsequent events to an authenticated user. Every event after this
+   * call carries `userId` on the wire; the server inserts a row into
+   * `identity_links` so pre-signup activity from the same `anonymousId` can
+   * be retroactively attributed to this user at query time.
+   *
+   * Call this the moment a user signs in or signs up. Safe to call repeatedly
+   * with the same id (no-op).
+   *
+   * @param userId  Your app's stable id for this user. Anything <=128 chars.
+   * @param traits  Optional user attributes (email, plan, etc.) sent with the
+   *                `$identify` event as properties. Use for profile enrichment
+   *                without polluting every subsequent event.
+   */
+  identify(userId: string, traits?: EventProperties) {
+    if (typeof userId !== "string" || userId.length === 0 || userId.length > 128) {
+      console.warn("[clamp] identify() requires a non-empty userId (<=128 chars)");
+      return;
+    }
+    if (!this.initialized) {
+      console.warn("[clamp] identify() called before init() — ignoring");
+      return;
+    }
+    if (this.userId === userId) {
+      this.log(`identify deduped: ${userId}`);
+      return;
+    }
+    this.userId = userId;
+    localStorage.setItem("clamp_uid", userId);
+    // Fire $identify so the server inserts an identity_links row and any
+    // attached traits land in event properties for profile enrichment.
+    this.emitSystem("$identify", { user_id: userId, ...(traits as EventProperties | undefined) });
+    this.log(`identify: ${userId}`);
+  }
+
+  /**
+   * Clear the bound user id and rotate the anonymous id, as if a brand-new
+   * visitor just arrived. Call this on logout. Does NOT flush queued events
+   * to a server before rotating — anything in the queue gets sent under the
+   * previous identity (correct: those events belong to the user who was
+   * signed in when they happened).
+   */
+  reset() {
+    if (!this.initialized) return;
+    this.flush(true);
+    this.userId = null;
+    localStorage.removeItem("clamp_uid");
+    this.anonymousId = this.newId("anon");
+    localStorage.setItem("clamp_aid", this.anonymousId);
+    this.sessionId = this.newId("ses");
+    sessionStorage.setItem("clamp_sid", this.sessionId);
+    this.log(`reset: new anonymousId=${this.anonymousId} sessionId=${this.sessionId}`);
+  }
+
   getAnonymousId(): string | null {
     return this.anonymousId;
+  }
+
+  getUserId(): string | null {
+    return this.userId;
   }
 
   // ── Private ─────────────────────────────────────────────────────────
@@ -352,6 +481,7 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     if (this.isPathExcluded(location.pathname)) {
       this.lastPageviewPath = null;
       this.engagementSeconds = 0;
+      this.maxScrollPct = 0;
       this.pageviewEndSent = false;
       this.log(`pageview excluded by path: ${path}`);
       return;
@@ -360,9 +490,29 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     this.lastPageviewPath = path;
     this.lastPageviewTime = now;
     this.engagementSeconds = 0;
+    this.maxScrollPct = 0;
     this.pageviewEndSent = false;
 
-    this.track("pageview" as any);
+    this.emitSystem("$pageview");
+    // Capture the new page's initial visible fold immediately — handles
+    // anchor-link landings (/page#section) which arrive scrolled.
+    this.updateMaxScroll();
+  }
+
+  /** Compute current visible-bottom % and update the high-water mark. */
+  private updateMaxScroll() {
+    const scroller = document.scrollingElement ?? document.documentElement;
+    const scrollHeight = scroller.scrollHeight;
+    const viewportHeight = window.innerHeight;
+    // Page is shorter than the viewport — everything's been visible.
+    if (scrollHeight <= viewportHeight) {
+      this.maxScrollPct = 100;
+      return;
+    }
+    const scrollY = window.scrollY || scroller.scrollTop;
+    const visibleBottom = scrollY + viewportHeight;
+    const pct = Math.min(100, Math.round((visibleBottom / scrollHeight) * 100));
+    if (pct > this.maxScrollPct) this.maxScrollPct = pct;
   }
 
   private isPathExcluded(pathname: string): boolean {
@@ -397,14 +547,17 @@ class BrowserClient<E extends EventMap = AnyEvents> {
     const payload: BatchPayload = {
       p: this.projectId!,
       events: [{
-        name: "pageview_end",
+        name: "$pageview_end",
         url: location.origin + this.lastPageviewPath,
         referrer: "",
         sessionId: this.sessionId!,
         anonymousId: this.anonymousId!,
         timestamp: new Date().toISOString(),
         platform: "web",
-        properties: { engagement_seconds: String(this.engagementSeconds) },
+        properties: {
+          engagement_seconds: String(this.engagementSeconds),
+          max_scroll_pct: String(this.maxScrollPct),
+        },
       }],
     };
 
@@ -464,12 +617,21 @@ export function init<_E extends EventMap = AnyEvents>(
 /**
  * Track a custom event. Fire-and-forget; events are batched and sent every 5s.
  * If called before init(), events are buffered and flushed when init() runs.
+ *
+ * Event names starting with `$` are reserved for canonical SDK events
+ * (revenue, page lifecycle, identity, errors, built-in extensions) and
+ * will be rejected at the type level. The same check runs at runtime —
+ * a $-prefixed name passed via `as any` or a JS caller drops the event
+ * with a console.warn rather than throwing.
  */
-export function track<E extends EventMap = AnyEvents, K extends keyof E & string = string>(
-  name: K,
+export function track<
+  E extends EventMap = AnyEvents,
+  K extends keyof E & string = string,
+>(
+  name: K extends `$${string}` ? never : K,
   properties?: E[K] extends EventProperties ? E[K] : EventProperties,
 ): void {
-  (client as any).track(name, properties);
+  client.track(name, properties as EventProperties | undefined);
 }
 
 /**
@@ -478,6 +640,88 @@ export function track<E extends EventMap = AnyEvents, K extends keyof E & string
  */
 export function getAnonymousId(): string | null {
   return client.getAnonymousId();
+}
+
+/**
+ * Bind subsequent events to a known user. Call when a visitor signs up or
+ * signs in. Every event after this carries `userId`; the server links the
+ * pre-signup `anonymousId` activity to the new `userId` at query time so
+ * the full journey (from first marketing-page view to first paid event)
+ * attributes to one identity.
+ *
+ *     clamp.identify('user_42abc', { email: 'jane@example.com', plan: 'pro' });
+ *
+ * `traits` are sent once with the `$identify` event for profile enrichment
+ * — they don't ride along on every subsequent event.
+ */
+export function identify(userId: string, traits?: EventProperties): void {
+  client.identify(userId, traits);
+}
+
+/**
+ * Clear the bound user id and rotate the anonymous id, as if a brand-new
+ * visitor just arrived. Call on logout so the next user on the same browser
+ * is tracked independently. Flushes any queued events first so they remain
+ * attributed to the previous user.
+ */
+export function reset(): void {
+  client.reset();
+}
+
+/**
+ * Get the currently bound user id (set by identify(), cleared by reset()).
+ * Returns null when the visitor hasn't identified.
+ */
+export function getUserId(): string | null {
+  return client.getUserId();
+}
+
+// Revenue types + validation are shared with the server SDK in
+// `./revenue.ts` so the two surfaces can't drift on canonical events,
+// mrr_delta inference, or warning text. Re-export the public surface so
+// browser callers can still import everything from "@clamp-sh/analytics".
+export type {
+  BillingPeriod,
+  CanonicalRevenueEvent,
+  SubscriptionRevenueEvent,
+  SubscriptionRevenueArgs,
+  PurchaseRevenueArgs,
+  RefundRevenueArgs,
+  RevenueArgs,
+} from "./revenue.js";
+import type { RevenueArgs } from "./revenue.js";
+import { prepareRevenue } from "./revenue.js";
+
+/**
+ * Record a revenue event with typed, reserved-property semantics that the
+ * dashboard's revenue view depends on.
+ *
+ *     clamp.revenue({
+ *       event: 'subscription_started',
+ *       amount: 29.99,
+ *       currency: 'USD',
+ *       plan: 'pro',
+ *       billing: 'monthly',
+ *       subscriptionId: 'sub_abc123',
+ *     });
+ *
+ * Under the hood this calls `track()` with a Money-typed `total` property +
+ * the canonical revenue properties (`plan`, `billing_period`, `mrr_delta`,
+ * `subscription_id`). The amount lands in the dedicated Decimal64 storage,
+ * not floats — pennies don't get lost.
+ *
+ * Server-side webhook ingestion (Stripe → @clamp-sh/analytics/server) is
+ * usually the source of truth for paid customers. Client-side
+ * `revenue()` is for capturing the **attribution context** (utm, referrer,
+ * landing page) at the moment of conversion — which channel actually drove
+ * this customer.
+ */
+export function revenue(args: RevenueArgs): void {
+  const prepared = prepareRevenue(args);
+  if (!prepared) return;
+  // prepared.event is already the $-prefixed wire name — route through
+  // emitSystem so the reserved-prefix guard doesn't reject it.
+  client.emitSystem(prepared.event, prepared.properties);
 }
 
 /**
@@ -508,7 +752,7 @@ export function captureError(
 ): void {
   client.loadErrorsModule().then((mod) => {
     const trackFn = (name: string, properties: EventProperties) =>
-      (client as any).track(name, properties);
+      client.emitSystem(name, properties);
     mod.captureError(trackFn, error, context);
   });
 }

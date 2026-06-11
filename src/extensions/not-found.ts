@@ -24,7 +24,7 @@ export function install404(track: TrackFn, pattern?: RegExp): () => void {
 
   const check = () => {
     if (re.test(document.title)) {
-      track("404", {
+      track("$not_found", {
         pathname: location.pathname,
         title: document.title.slice(0, 200),
       });

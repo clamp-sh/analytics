@@ -27,7 +27,7 @@ export function installOutboundLinks(track: TrackFn): () => void {
       if (url.hostname === location.hostname) return;
       if (!/^https?:$/.test(url.protocol)) return; // skip mailto:, tel:, javascript:
 
-      track("outbound_click", {
+      track("$outbound_link", {
         url: url.href,
         host: url.hostname,
         pathname: url.pathname,

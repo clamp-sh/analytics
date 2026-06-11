@@ -34,6 +34,9 @@ export interface EventPayload {
   referrer?: string;
   sessionId?: string;
   anonymousId?: string;
+  /** Authenticated user id, set when clamp.identify() has been called.
+   *  Empty string for visitors who haven't identified. */
+  userId?: string;
   timestamp?: string;
   screenWidth?: number;
   screenHeight?: number;
@@ -58,6 +61,11 @@ export interface ServerPayload {
   p: string;
   name: string;
   anonymousId?: string;
+  /** Identified user id, for events coming from a server-authoritative
+   *  source where the user is already known (Stripe webhook, background
+   *  job, server-rendered signup). The dashboard joins server events to
+   *  browser activity for the same userId. */
+  userId?: string;
   properties?: EventProperties;
   timestamp?: string;
 }

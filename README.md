@@ -16,7 +16,7 @@
 
 Web analytics SDK for [Clamp Analytics](https://clamp.sh) — a privacy-first product analytics platform with a built-in [MCP](https://modelcontextprotocol.io) server, so the same events you track with this SDK are queryable by Claude, Cursor, VS Code, and any other Model Context Protocol client.
 
-Auto-pageviews, sessions, custom events, revenue, and error capture in under 2 KB gzipped. No cookies, no personal data, no consent banner. Works in the browser, on the server, with React and Next.js, and via a one-tag CDN install for hosted platforms.
+Auto-pageviews, sessions, custom events, `identify` for logged-in users, typed `revenue()` for subscriptions and one-time purchases, and error capture in under 2 KB gzipped. No cookies, no personal data, no consent banner. Works in the browser, on the server, with React and Next.js, and via a one-tag CDN install for hosted platforms.
 
 Hosted at [clamp.sh](https://clamp.sh/signup) — free tier covers 100k events/month. MIT SDK; the platform itself is hosted by Clamp.
 
@@ -102,15 +102,25 @@ init("proj_xxx", { excludePaths: ["/dashboard"] });
 ## Browser
 
 ```ts
-import { init, track, getAnonymousId } from "@clamp-sh/analytics"
+import { init, track, identify, reset, revenue, getAnonymousId, getUserId } from "@clamp-sh/analytics"
 
 init("proj_xxx")
 
 // Custom events
 track("signup", { plan: "pro" })
 
-// Get visitor ID (for linking server-side events)
-const anonId = getAnonymousId()
+// Bind the anonymous visitor to a known user (persists across sessions)
+identify(user.id, { email: user.email, plan: user.plan })
+
+// Record a payment
+revenue({ amount: 29, currency: "USD", plan: "pro", billing: "monthly" })
+
+// Logout — clears userId, rotates anonymous + session IDs
+reset()
+
+// Read IDs
+getAnonymousId()  // rotating anon ID
+getUserId()       // null before identify(), or the bound userId
 ```
 
 After `init()`, pageviews are tracked automatically, including SPA navigations.
@@ -166,13 +176,38 @@ On the server:
 ```ts
 import { track } from "@clamp-sh/analytics/server"
 
-await track("subscription_created", {
+await track("invite_accepted", {
   anonymousId: "anon_abc123",
-  properties: { plan: "pro", interval: "monthly" },
+  properties: {
+    team_id: "team_42",
+    role: "editor",
+  },
 })
 ```
 
-Pageviews are tracked automatically. Everything else goes through `track()`.
+Pageviews are tracked automatically. Everything else goes through `track()`, or `revenue()` for payments (see [Revenue](#revenue)). The canonical revenue event names (`subscription_started`, `purchase`, `refund_issued`, etc.) always go through `revenue()`, not `track()` — only events emitted through `revenue()` carry `mrr_delta` and land on the Revenue tab with the `$`-prefixed wire name the dashboard and MCP tools query against.
+
+## Identify users
+
+Call `clamp.identify(userId, traits?)` after login or signup. The userId persists across reloads and tabs, and attaches to every subsequent event automatically, so events from the same user across devices and sessions land under one identity.
+
+```ts
+import { identify, reset } from "@clamp-sh/analytics"
+
+// After auth succeeds:
+identify(user.id, {
+  email: user.email,
+  plan: user.plan,
+  signup_date: user.createdAt,
+})
+
+// On logout — clears userId, rotates anonymous + session IDs:
+reset()
+```
+
+Traits are optional user attributes sent once as an `$identify` event. Use them for slicing in the dashboard ("customers on the Pro plan", "users who signed up this month"). Never send PII (raw email beyond hashing, addresses, payment details).
+
+Call `reset()` on signout, not on session expiry — it rotates the anonymous + session IDs so the next visitor on this device isn't conflated with the one who logged out.
 
 ## Typed events
 
@@ -183,7 +218,7 @@ import type { Money } from "@clamp-sh/analytics"
 
 type Events = {
   signup: { plan: string; source: string }
-  purchase: { plan: string; total: Money; tax: Money }
+  checkout_completed: { plan: string; total: Money; tax: Money }
   feature_used: { name: string }
   invite_sent: { role: string }
 }
@@ -195,6 +230,8 @@ track("signup", { wrong: "field" })                     // type error
 track("unknown_event")                                  // type error
 ```
 
+The typed event map covers custom `track()` events only. Canonical revenue names (`subscription_started`, `purchase`, `refund_issued`, etc.) go through `revenue()`, which is already typed via the `RevenueArgs` discriminated union.
+
 Past a handful of events, declare them in [`event-schema.yaml`](https://github.com/clamp-sh/event-schema) and let the CLI generate the type — same compile-time safety, one source of truth across your codebase and your team.
 
 Works the same way with the server SDK:
@@ -204,7 +241,7 @@ import { init, track } from "@clamp-sh/analytics/server"
 
 init<Events>({ projectId: "proj_xxx", apiKey: "sk_proj_..." })
 
-await track("purchase", {
+await track("checkout_completed", {
   properties: {
     plan:  "pro",
     total: { amount: 49, currency: "USD" },
@@ -215,29 +252,173 @@ await track("purchase", {
 
 ## Revenue
 
-Attach a `Money` value to any event property to make it queryable by `revenue.sum`. Clamp never mixes currencies in a single sum.
+Call `clamp.revenue()` wherever a customer pays. The SDK emits a typed event with the canonical `total` Money property, reserved `plan` / `billing_period` / `subscription_id` / `mrr_delta` properties, and an inferred event name (`subscription_started` for monthly or annual, `purchase` for one_time).
 
 ```ts
-import { track } from "@clamp-sh/analytics"
+import { revenue } from "@clamp-sh/analytics"
 
-track("purchase", {
-  plan:  "pro",
-  total: { amount: 29.00, currency: "USD" },
-  tax:   { amount: 4.35,  currency: "USD" },
+// Subscription start — mrr_delta inferred as 29.
+revenue({
+  amount: 29,
+  currency: "USD",
+  plan: "pro",
+  billing: "monthly",
+  subscriptionId: sub.id,
+})
+
+// Annual subscription — mrr_delta inferred as 290 / 12 = 24.17.
+revenue({
+  amount: 290,
+  currency: "USD",
+  plan: "pro",
+  billing: "annual",
+  subscriptionId: sub.id,
+})
+
+// One-time purchase — mrr_delta is 0.
+revenue({
+  amount: 49,
+  currency: "USD",
+  billing: "one_time",
+  product: "Template Pack",
 })
 ```
 
-Server-side (e.g. from a Stripe webhook):
+### Three shapes, type-enforced
+
+`RevenueArgs` is a discriminated union — TypeScript rejects mixing the two breakdown dimensions at compile time (no `purchase` events with `plan`; no `subscription_*` events with `product`; no `{ amount: 29 }` without either).
+
+**SubscriptionRevenueArgs** — for `subscription_started` / `_renewed` / `_upgraded` / `_downgraded` / `_canceled` / `_paused` / `_resumed`. `plan` required, `product` forbidden, `billing` is one of `"monthly" | "annual" | "weekly"`.
+
+**PurchaseRevenueArgs** — for `purchase`. `product` required; `plan` and `subscriptionId` forbidden; `billing` is `"one_time"`.
+
+**RefundRevenueArgs** — for `refund_issued`. Permissive — pass `plan` + `subscriptionId` for a subscription refund, or `product` for a one-time refund. `event` is required here (no sensible default).
+
+| Field | Type | Notes |
+|---|---|---|
+| `amount` | `number` | Major units (29 for $29, not 2900). For cancel, typically 0 — pair with `previousAmount`. For refund, negative. |
+| `currency` | `string` | ISO 4217 ("USD", "EUR", "JPY"). Defaults to `"USD"`. |
+| `billing` | `BillingPeriod` | Narrowed by shape — subs are `"monthly" \| "annual" \| "weekly"`; purchase is `"one_time"`; refund accepts any. |
+| `event` | canonical name | Optional except on `RefundRevenueArgs`. Defaults follow the shape: `subscription_started` for subs, `purchase` for one-time. |
+| `plan` | `string` | Required for subscription events, forbidden on purchase. Drives the Plans card. |
+| `product` | `string` | Required for purchase, forbidden on subscription events. Drives the Products card. |
+| `subscriptionId` | `string` | Allowed on sub events and refunds; forbidden on purchase. Links events across renew, upgrade, cancel. |
+| `previousAmount` | `number` | Required on sub events where the SDK derives `mrr_delta` from the diff (upgrade, downgrade, canceled). |
+| `mrrDelta` | `number` | Override the inferred delta. Use for partial refunds or other cases the inference table doesn't fit. |
+
+`mrr_delta` is derived from the event name plus billing:
+
+| Event | mrr_delta inferred as |
+|---|---|
+| `subscription_started` | `+amount` (monthly) or `+amount/12` (annual) |
+| `subscription_renewed` | `0` (balance unchanged, just cash collected) |
+| `subscription_upgraded` | `new_mrr − previous_mrr` (requires `previousAmount`) |
+| `subscription_downgraded` | same shape, negative diff |
+| `subscription_canceled` | `−amount` (monthly) or `−amount/12` (annual) |
+| `purchase` / `refund_issued` | `0` (not recurring) |
+
+Anything billed `one_time` is always `0` regardless of event. Anything recurring with an unrecognised event name defaults to `+amount` so a custom event like `subscription_resumed` does the sensible thing without configuration. Override `mrrDelta` directly for the long-tail cases.
 
 ```ts
-import { track } from "@clamp-sh/analytics/server"
+// Upgrade from $29 to $89 — mrr_delta inferred as +60.
+revenue({
+  amount: 89,
+  previousAmount: 29,
+  currency: "USD",
+  event: "subscription_upgraded",
+  plan: "growth",
+  billing: "monthly",
+})
 
-await track("checkout_completed", {
-  anonymousId: session.client_reference_id,
-  properties: {
-    plan:  session.metadata.plan,
-    total: { amount: session.amount_total / 100, currency: session.currency.toUpperCase() },
-  },
+// Cancellation — no cash collected. previousAmount drives mrr_delta = -29.
+revenue({
+  amount: 0,
+  previousAmount: 29,               // what they WERE paying
+  currency: "USD",
+  event: "subscription_canceled",
+  plan: "pro",
+  billing: "monthly",
+  subscriptionId: sub.id,
+})
+
+// Renewal — mrr_delta inferred as 0 (cash collected, balance unchanged).
+revenue({
+  amount: 29,
+  currency: "USD",
+  event: "subscription_renewed",
+  plan: "pro",
+  billing: "monthly",
+  subscriptionId: sub.id,
+})
+```
+
+### Canonical subscription events
+
+`revenue()` is strict about event names. The Revenue tab, MCP tools, and analytics-skills pack all assume the names below, so the `CanonicalRevenueEvent` type only allows these — TypeScript catches anything else at compile time, and the runtime guard rejects non-canonical names from JS callers with a typo suggestion when one exists (`subscription_created` → `subscription_started`, `checkout_completed` → `purchase`, etc.).
+
+| Public name (passed to `revenue()`) | Wire name (sent to ingest, used in MCP queries / dashboard filters) | When to send |
+|---|---|---|
+| `subscription_started`   | `$subscription_started`   | First paid invoice on a new subscription |
+| `subscription_renewed`   | `$subscription_renewed`   | Recurring renewal invoice paid |
+| `subscription_upgraded`  | `$subscription_upgraded`  | Plan change to a higher tier |
+| `subscription_downgraded`| `$subscription_downgraded`| Plan change to a lower tier |
+| `subscription_canceled`  | `$subscription_canceled`  | Subscription ends |
+| `subscription_paused`    | `$subscription_paused`    | Subscription paused |
+| `subscription_resumed`   | `$subscription_resumed`   | Subscription resumed |
+| `purchase`               | `$purchase`               | One-shot purchase (default for `billing: "one_time"`) |
+| `refund_issued`          | `$refund_issued`          | Refund webhook fires |
+
+User code always passes the un-prefixed public name to `revenue()`. The SDK translates to the `$`-prefixed wire name before emission. The wire name is what shows up in the events table, in MCP queries (e.g. `revenue.retention({ cohort_event: "$subscription_started" })`), and in dashboard filter values.
+
+If you need a custom revenue-shaped event, drop to `track()` with a Money property + `mrr_delta` numeric prop:
+
+```ts
+track("trial_started", {
+  total: { amount: 0, currency: "USD" },
+  plan: "pro",
+  mrr_delta: 0,
+  billing_period: "monthly",
+})
+```
+
+### TypeScript
+
+```ts
+import type { Money, BillingPeriod, RevenueArgs } from "@clamp-sh/analytics"
+
+const args: RevenueArgs = {
+  amount: 29,
+  currency: "USD",
+  plan: "pro",
+  billing: "monthly" satisfies BillingPeriod,
+}
+```
+
+### Server-side (e.g. from a Stripe webhook)
+
+```ts
+import { revenue } from "@clamp-sh/analytics/server"
+
+await revenue({
+  userId: customer.id,                         // bind to the identified user
+  amount: invoice.amount_paid / 100,           // Stripe ships cents
+  currency: invoice.currency.toUpperCase(),
+  event: "subscription_renewed",
+  plan: sub.metadata.plan,
+  billing: "monthly",
+  subscriptionId: sub.id,
+})
+```
+
+### Raw money on custom events
+
+For anything outside the canonical revenue events, `track()` still accepts any property whose value is a `Money` object. Use this for tax, discount, refund-attribution amounts, or anything else `revenue()` doesn't model directly.
+
+```ts
+track("checkout_completed", {
+  plan: "pro",
+  total: { amount: 49, currency: "USD" },
+  tax:   { amount: 7.35, currency: "USD" },
 })
 ```
 
@@ -252,7 +433,7 @@ Auto-tracked clicks can also carry money via `data-clamp-money-<key>`:
 >Buy</button>
 ```
 
-Your agent can now ask questions like "which source drove the most revenue last month" or "how much did European traffic spend on the Pro plan".
+Your agent can now ask questions like "which source drove the most revenue last month", "what's our MRR this quarter", or "are subscribers expanding or contracting?" — see [the MCP revenue tools](https://clamp.sh/docs/mcp/tools#revenue) for the full set.
 
 ## Errors
 
@@ -415,16 +596,22 @@ export async function createTeam(name: string, anonId: string) {
 
 ```ts
 import express from "express"
-import { init, track } from "@clamp-sh/analytics/server"
+import { init, revenue } from "@clamp-sh/analytics/server"
 
 init({ projectId: "proj_xxx", apiKey: "sk_proj_..." })
 
 const app = express()
 
 app.post("/api/subscribe", async (req, res) => {
-  await track("subscription_started", {
+  // subscription_started is a canonical revenue event — route through revenue()
+  // so mrr_delta and the Revenue tab cards populate correctly.
+  await revenue({
     anonymousId: req.body.anonId,
-    properties: { plan: req.body.plan },
+    amount: req.body.amount,
+    currency: "USD",
+    plan: req.body.plan,
+    billing: "monthly",
+    subscriptionId: req.body.subscriptionId,
   })
   res.json({ ok: true })
 })
