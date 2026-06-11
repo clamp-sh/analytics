@@ -1,6 +1,6 @@
 {
   "name": "@clamp-sh/analytics",
-  "version": "0.12.1",
+  "version": "0.13.0",
   "description": "Privacy-first analytics SDK for Clamp Analytics. MCP-native — your AI agent can query the same events. Auto-pageviews, sessions, revenue, errors. Browser, server, React, and one-tag CDN install for Webflow / Shopify / WordPress and other hosted platforms.",
   "license": "MIT",
   "homepage": "https://clamp.sh/docs/sdk",

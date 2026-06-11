@@ -1,5 +1,19 @@
 # @clamp-sh/analytics
 
+## 0.13.0
+
+### Minor Changes
+
+- [`b9debda`](https://github.com/clamp-sh/clamp/commit/b9debda546ee7104f4b2cd09ef8983b5bed21b23) Thanks [@sbj-o](https://github.com/sbj-o)! - SDK adds `clamp.identify(userId, traits?)` to bind an anonymous visitor to a known user, `clamp.reset()` to clear identity on logout (rotates anonymous + session ids), and `clamp.revenue()` for canonical revenue events with derived `mrr_delta`.
+
+  `clamp.revenue()` is event-aware: pass the canonical event name (`subscription_started`, `subscription_renewed`, `subscription_upgraded`, `subscription_downgraded`, `subscription_canceled`, `subscription_paused`, `subscription_resumed`, `purchase`, `refund_issued`) and the SDK derives `mrr_delta` from event + billing + amount (and `previousAmount` for upgrades / downgrades / cancellations). The TypeScript type `CanonicalRevenueEvent` only accepts these names; the runtime guard rejects non-canonical names from JS callers with a typo suggestion (`subscription_created` → `subscription_started`, `checkout_completed` → `purchase`, etc.). New exported types: `Money`, `BillingPeriod`, `CanonicalRevenueEvent`, `RevenueArgs`.
+
+  MCP `revenue.summary` output schema now matches the API: returns `customers`, `orders`, `aov`, `ltv`, `comparison`, `is_subscription`, `has_one_time`, and a `products` rollup alongside the existing `plans`. The old `arpu` and `paying_customers` top-level fields are gone (callers should read `customers` and divide).
+
+  MCP `revenue.retention` reshaped for MRR-on-MRR cohort retention: each window returns `mature_size`, `retained`, `retention_rate`, `mrr_at_d`, `baseline_mrr_mature`, and `nrr` (net revenue retention, where >1.0 means net expansion). The old `baseline_revenue` and `dollar_retention_rate` fields are gone.
+
+- [`b9debda`](https://github.com/clamp-sh/clamp/commit/b9debda546ee7104f4b2cd09ef8983b5bed21b23) Thanks [@sbj-o](https://github.com/sbj-o)! - Canonical revenue events and system events now emit with a `$` prefix on the wire (`$subscription_started`, `$pageview`, etc.). User `track()` calls cannot emit `$`-prefixed names — enforced at the type level and at runtime. This prevents name collisions between user custom events and the canonical revenue dataset.
+
 ## 0.12.1
 
 ### Patch Changes
